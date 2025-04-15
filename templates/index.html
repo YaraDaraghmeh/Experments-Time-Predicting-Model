@@ -1,0 +1,176 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiment Time Predictor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 30px;
+        }
+        .card {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+        .card-header {
+            background-color: #6c757d;
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+        }
+        .prediction-result {
+            display: none;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header text-center">
+                        <h3>Experiment Time Predictor</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if not model_loaded %}
+                        <div class="alert alert-warning" role="alert">
+                            <h5 class="alert-heading">Model Not Loaded</h5>
+                            <p>Please upload the trained model file (experiment_time_predictor.pkl) to make predictions.</p>
+                            <form id="uploadForm" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <input class="form-control" type="file" id="modelFile" name="model_file">
+                                </div>
+                                <button type="submit" class="btn btn-primary">Upload Model</button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <form id="predictionForm">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="materials" class="form-label">Number of Materials Used</label>
+                                    <input type="number" class="form-control" id="materials" name="materials" required min="1" value="6">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="complexity" class="form-label">Complexity (1-5)</label>
+                                    <input type="number" class="form-control" id="complexity" name="complexity" required min="1" max="5" value="3">
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="steps" class="form-label">Number of Steps</label>
+                                    <input type="number" class="form-control" id="steps" name="steps" required min="1" value="10">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="grade" class="form-label">Grade Level</label>
+                                    <input type="number" class="form-control" id="grade" name="grade" required min="1" value="8">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="subject" class="form-label">Subject</label>
+                                <select class="form-select" id="subject" name="subject" required>
+                                    <option value="Physics">Physics</option>
+                                    <option value="Chemistry">Chemistry</option>
+                                    <option value="Biology">Biology</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Predict Experiment Time</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div id="resultCard" class="card prediction-result">
+                    <div class="card-header text-center">
+                        <h4>Prediction Result</h4>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="text-center mb-4">Estimated experiment time: <span id="predictedTime" class="badge bg-success fs-4">0</span> minutes</h5>
+                        <div class="alert alert-info">
+                            <h6>Input Parameters:</h6>
+                            <div id="inputParams"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle prediction form
+            {% if model_loaded %}
+            const predictionForm = document.getElementById('predictionForm');
+            predictionForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(predictionForm);
+
+                fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show prediction result
+                        document.getElementById('predictedTime').textContent = data.prediction;
+
+                        // Display input parameters
+                        let paramsHTML = `
+                            <ul class="list-group">
+                                <li class="list-group-item">Materials Used: ${data.input_data.materials}</li>
+                                <li class="list-group-item">Complexity: ${data.input_data.complexity}</li>
+                                <li class="list-group-item">Number of Steps: ${data.input_data.steps}</li>
+                                <li class="list-group-item">Grade Level: ${data.input_data.grade}</li>
+                                <li class="list-group-item">Subject: ${data.input_data.subject}</li>
+                            </ul>
+                        `;
+                        document.getElementById('inputParams').innerHTML = paramsHTML;
+
+                        // Show result card
+                        document.getElementById('resultCard').style.display = 'block';
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred during prediction');
+                });
+            });
+            {% endif %}
+
+            // Handle model upload form
+            {% if not model_loaded %}
+            const uploadForm = document.getElementById('uploadForm');
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(uploadForm);
+
+                fetch('/upload_model', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Model uploaded successfully. Refreshing page...');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred during model upload');
+                });
+            });
+            {% endif %}
+        });
+    </script>
+</body>
+</html>
